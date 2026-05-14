@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GAS DIVER — Prototype</title>
+<style>
+  :root {
+    --bg: #07080b;
+    --panel: rgba(14, 16, 22, 0.92);
+    --border: #1e232c;
+    --border-bright: #2a323e;
+    --text: #c8ced6;
+    --muted: #6b7480;
+    --accent: #8fb4ff;
+    --accent-warm: #ffb070;
+    --danger: #ff5060;
+    --ok: #80e0a0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 12px; }
+  canvas { display: block; cursor: crosshair; }
+
+  /* HUD */
+  #hud {
+    position: fixed; top: 12px; left: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    line-height: 1.6;
+    pointer-events: none;
+    min-width: 220px;
+    letter-spacing: 0.02em;
+  }
+  #hud .row { display: flex; justify-content: space-between; gap: 16px; }
+  #hud .lbl { color: var(--muted); }
+  #hud .val { color: var(--text); }
+  #hud .val.good { color: var(--ok); }
+  #hud .val.warn { color: var(--accent-warm); }
+  #hud .val.bad  { color: var(--danger); }
+  #hud .title { color: var(--accent); font-weight: bold; letter-spacing: 0.18em; margin-bottom: 4px; }
+  #hud .sep { height: 1px; background: var(--border); margin: 6px 0; }
+
+  #status {
+    position: fixed; bottom: 12px; left: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  #status kbd {
+    background: #161a22;
+    border: 1px solid var(--border-bright);
+    padding: 1px 5px;
+    border-radius: 2px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 11px;
+  }
+
+  /* Panel */
+  #panel {
+    position: fixed; top: 0; right: 0;
+    width: 320px; height: 100vh;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 14px 16px 30px;
+    transition: transform 0.2s ease;
+  }
+  #panel.collapsed { transform: translateX(320px); }
+  #panel h3 {
+    color: var(--accent);
+    font-size: 11px;
+    margin: 18px 0 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 5px;
+    letter-spacing: 0.16em;
+    font-weight: 600;
+  }
+  #panel h3:first-child { margin-top: 0; }
+  .ctl {
+    display: grid;
+    grid-template-columns: 1fr 130px 46px;
+    align-items: center;
+    gap: 6px;
+    margin: 5px 0;
+    font-size: 11px;
+  }
+  .ctl label { color: var(--muted); }
+  .ctl .val {
+    color: var(--accent);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    background: var(--border);
+    height: 3px;
+    outline: none;
+    border-radius: 0;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 11px; height: 11px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 11px; height: 11px;
+    background: var(--accent);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  .ctl.bool {
+    grid-template-columns: 1fr auto;
+  }
+  .ctl.bool input { accent-color: var(--accent); }
+
+  button {
+    background: #161a22;
+    color: var(--text);
+    border: 1px solid var(--border-bright);
+    padding: 5px 10px;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: background 0.1s;
+  }
+  button:hover { background: #1f2530; border-color: var(--accent); }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .btn-row button { flex: 1; min-width: 90px; }
+
+  textarea {
+    width: 100%;
+    height: 88px;
+    background: #0c0f15;
+    color: var(--text);
+    font: inherit;
+    font-size: 10px;
+    border: 1px solid var(--border);
+    padding: 6px;
+    margin-top: 6px;
+    resize: vertical;
+    line-height: 1.4;
+  }
+
+  #toggle {
+    position: fixed; top: 12px;
+    right: 332px;
+    z-index: 10;
+    width: 32px; height: 32px;
+    padding: 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    font-size: 16px;
+    line-height: 1;
+    color: var(--accent);
+    transition: right 0.2s ease;
+  }
+  #toggle.collapsed { right: 12px; }
+
+  #legend {
+    position: fixed; bottom: 12px;
+    right: 332px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    font-size: 11px;
+    transition: right 0.2s ease;
+    pointer-events: none;
+  }
+  #legend.collapsed { right: 12px; }
+  #legend .item { display: flex; align-items: center; gap: 6px; line-height: 1.6; }
+  #legend .swatch { width: 10px; height: 10px; border-radius: 50%; }
+
+  #toast {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--panel);
+    border: 1px solid var(--border-bright);
+    padding: 14px 22px;
+    color: var(--accent);
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div id="hud">
+  <div class="title">GAS DIVER</div>
+  <div class="row"><span class="lbl">fps</span><span class="val" id="h_fps">—</span></div>
+  <div class="row"><span class="lbl">particles</span><span class="val" id="h_n">—</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="lbl">pos</span><span class="val" id="h_pos">—</span></div>
+  <div class="row"><span class="lbl">vel</span><span class="val" id="h_vel">—</span></div>
+  <div class="row"><span class="lbl">density</span><span class="val" id="h_den">—</span></div>
+  <div class="row"><span class="lbl">layer</span><span class="val" id="h_lay">—</span></div>
+  <div class="row"><span class="lbl">crush</span><span class="val" id="h_crush">—</span></div>
+</div>
+
+<div id="status">
+  <kbd>WASD</kbd> thrust &nbsp;
+  <kbd>R</kbd> respawn &nbsp;
+  <kbd>Space</kbd> pause &nbsp;
+  <kbd>.</kbd> step &nbsp;
+  <kbd>F</kbd> follow &nbsp;
+  <kbd>wheel</kbd> zoom
+</div>
+
+<button id="toggle" title="Toggle parameters">≡</button>
+
+<div id="legend">
+  <div class="item"><div class="swatch" style="background:#a8d8ff"></div>Hydrogen · m 0.5</div>
+  <div class="item"><div class="swatch" style="background:#c8e6c9"></div>Nitrogen · m 1.0</div>
+  <div class="item"><div class="swatch" style="background:#ffcc80"></div>Carbon &nbsp;&nbsp;· m 2.0</div>
+  <div class="item"><div class="swatch" style="background:#ce93d8"></div>Xenon &nbsp;&nbsp;&nbsp;· m 4.0</div>
+</div>
+
+<div id="panel"></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   GAS DIVER — Prototype
+   Section 2 of the GDD. Particle simulation + player diver.
+   ============================================================ */
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ============================================================
+   TUNABLE PARAMETERS
+   Every meaningful simulation knob lives here.
+   ============================================================ */
+
+const PARAMS = {
+  // ----- Particle composition -----
+  countH:        700,
+  countN:        450,
+  countC:        250,
+  countX:        100,
+  spawnRadius:   500,
+  initialJitter: 8,    // initial random velocity (helps avoid symmetric lockups)
+
+  // ----- Particle forces -----
+  // Universal mass-weighted binding force. Keeps the planet together at all.
+  // Without it, same-type clusters would drift apart.
+  universalAttract:   18,
+  universalSoften:    40,   // softening for 1/(d²+s) to avoid blowups
+
+  // Same-type mid-range cohesion. Causes clumping within layers.
+  sameTypeAttract:    60,
+
+  // Same-type short-range repulsion. Prevents singularity.
+  sameTypeRepulse:    450,
+
+  // Cross-type short-range repulsion. Drives layer separation.
+  crossTypeRepulse:   90,
+  crossTypeRadius:    22,
+
+  forceCap:           80,   // per-particle force magnitude cap (stability)
+  damping:            0.93, // per-step velocity damping
+
+  simSpeed:           1.0,  // global time scale for simulation
+
+  // ----- Player physics -----
+  thrustForce:        45,
+  thrustFuelless:     true, // free thrust during prototype
+
+  buoyancyCoeff:      180,
+  dragCoeff:          0.06,
+  densityRadius:      24,
+  densityProbeOffset: 18,   // gradient sample offset
+
+  crushThreshold:     38,
+  escapeVel:          22,
+  crushTime:          1.6,
+  crushRecovery:      0.6,  // multiplier on dt for healing
+  startDistance:      900,
+
+  // ----- Display -----
+  particleSize:       1.6,
+  particleAlpha:      1.0,
+  trailLength:        60,
+  showDensityProbe:   false,
+  showOrigin:         true,
+  zoom:               0.9,
+  cameraLerp:         0.18,
+  followShip:         true,
+};
+
+/* ============================================================
+   PARTICLE TYPES (from GDD §2.2)
+   ============================================================ */
+
+const TYPES = [
+  { name: 'H', mass: 0.5, attract: 80, repulse: 8,  color: '#a8d8ff', r: 168, g: 216, b: 255 },
+  { name: 'N', mass: 1.0, attract: 60, repulse: 10, color: '#c8e6c9', r: 200, g: 230, b: 201 },
+  { name: 'C', mass: 2.0, attract: 40, repulse: 14, color: '#ffcc80', r: 255, g: 204, b: 128 },
+  { name: 'X', mass: 4.0, attract: 25, repulse: 18, color: '#ce93d8', r: 206, g: 147, b: 216 },
+];
+const MAX_ATTRACT = 80;
+const CELL_SIZE = MAX_ATTRACT;
+
+/* ============================================================
+   PARTICLE STATE — flat typed arrays
+   ============================================================ */
+
+let N = 0;
+let px, py, pvx, pvy, pType;
+let fx_buf, fy_buf;
+
+function initParticles() {
+  const counts = [PARAMS.countH, PARAMS.countN, PARAMS.countC, PARAMS.countX];
+  N = counts.reduce((a, b) => a + b, 0);
+
+  px = new Float32Array(N);
+  py = new Float32Array(N);
+  pvx = new Float32Array(N);
+  pvy = new Float32Array(N);
+  pType = new Uint8Array(N);
+  fx_buf = new Float32Array(N);
+  fy_buf = new Float32Array(N);
+
+  let k = 0;
+  for (let t = 0; t < 4; t++) {
+    for (let i = 0; i < counts[t]; i++) {
+      const r = Math.sqrt(Math.random()) * PARAMS.spawnRadius;
+      const a = Math.random() * Math.PI * 2;
+      px[k] = Math.cos(a) * r;
+      py[k] = Math.sin(a) * r;
+      pvx[k] = (Math.random() - 0.5) * PARAMS.initialJitter;
+      pvy[k] = (Math.random() - 0.5) * PARAMS.initialJitter;
+      pType[k] = t;
+      k++;
+    }
+  }
+}
+
+/* ============================================================
+   SPATIAL HASH — O(1) neighbour lookup
+   ============================================================ */
+
+const grid = new Map();
+
+function gridKey(cx, cy) {
+  // Pack two 16-bit signed coords into one int. Range ±32768.
+  return ((cx + 32768) << 16) | (cy + 32768);
+}
+
+function rebuildGrid() {
+  grid.clear();
+  for (let i = 0; i < N; i++) {
+    const cx = Math.floor(px[i] / CELL_SIZE);
+    const cy = Math.floor(py[i] / CELL_SIZE);
+    const k = gridKey(cx, cy);
+    let arr = grid.get(k);
+    if (!arr) { arr = []; grid.set(k, arr); }
+    arr.push(i);
+  }
+}
+
+const _nb = [];
+
+function queryGrid(x, y) {
+  _nb.length = 0;
+  const cx = Math.floor(x / CELL_SIZE);
+  const cy = Math.floor(y / CELL_SIZE);
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const arr = grid.get(gridKey(cx + dx, cy + dy));
+      if (!arr) continue;
+      for (let j = 0; j < arr.length; j++) _nb.push(arr[j]);
+    }
+  }
+  return _nb;
+}
+
+/* ============================================================
+   PARTICLE SIMULATION
+   ============================================================ */
+
+function simulate(dt) {
+  rebuildGrid();
+
+  const uA = PARAMS.universalAttract;
+  const uS = PARAMS.universalSoften;
+  const sA = PARAMS.sameTypeAttract;
+  const sR = PARAMS.sameTypeRepulse;
+  const xR = PARAMS.crossTypeRepulse;
+  const xRad = PARAMS.crossTypeRadius;
+  const xRad2 = xRad * xRad;
+  const cap = PARAMS.forceCap;
+  const cap2 = cap * cap;
+
+  fx_buf.fill(0);
+  fy_buf.fill(0);
+
+  for (let i = 0; i < N; i++) {
+    const xi = px[i], yi = py[i];
+    const ti = pType[i];
+    const T = TYPES[ti];
+    const mi = T.mass;
+    const aRad = T.attract;
+    const aRad2 = aRad * aRad;
+    const rRad = T.repulse;
+
+    const neigh = queryGrid(xi, yi);
+    let fix = 0, fiy = 0;
+
+    for (let n = 0; n < neigh.length; n++) {
+      const j = neigh[n];
+      if (j === i) continue;
+      const dx = px[j] - xi;
+      const dy = py[j] - yi;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > CELL_SIZE * CELL_SIZE * 4) continue;
+      if (d2 < 0.0001) continue;
+
+      const d = Math.sqrt(d2);
+      const inv = 1 / d;
+      const nx = dx * inv;
+      const ny = dy * inv;
+
+      const tj = pType[j];
+      const mj = TYPES[tj].mass;
+
+      // Positive f = attractive force, negative = repulsive
+      let f = 0;
+
+      // Universal mass-weighted attraction (softened)
+      f += uA * mi * mj / (d2 + uS);
+
+      if (ti === tj) {
+        // Same type
+        if (d < rRad) {
+          // Short-range repulsion: ramp linearly to zero at rRad
+          f -= sR * (rRad - d) / rRad;
+        }
+        if (d2 < aRad2) {
+          // Mid-range cohesion: bell-shaped, peaks between rRad and aRad
+          f += sA / (d2 / 30 + 1);
+        }
+      } else {
+        // Cross-type weak repulsion
+        if (d2 < xRad2) {
+          f -= xR * (xRad - d) / xRad;
+        }
+      }
+
+      fix += f * nx;
+      fiy += f * ny;
+    }
+
+    // Cap force magnitude
+    const fm2 = fix * fix + fiy * fiy;
+    if (fm2 > cap2) {
+      const fm = Math.sqrt(fm2);
+      fix = fix / fm * cap;
+      fiy = fiy / fm * cap;
+    }
+
+    fx_buf[i] = fix;
+    fy_buf[i] = fiy;
+  }
+
+  // Integrate
+  const damp = PARAMS.damping;
+  for (let i = 0; i < N; i++) {
+    const mi = TYPES[pType[i]].mass;
+    pvx[i] = (pvx[i] + fx_buf[i] / mi * dt) * damp;
+    pvy[i] = (pvy[i] + fy_buf[i] / mi * dt) * damp;
+    px[i] += pvx[i] * dt;
+    py[i] += pvy[i] * dt;
+  }
+}
+
+/* ============================================================
+   PLAYER
+   ============================================================ */
+
+const player = {
+  x: 0, y: 0,
+  vx: 0, vy: 0,
+  angle: -Math.PI / 2,
+  density: 0,
+  crushDamage: 0,
+  alive: true,
+  trail: [],
+  layerHist: [0, 0, 0, 0],
+};
+
+function resetPlayer() {
+  player.x = 0;
+  player.y = -PARAMS.startDistance;
+  player.vx = 0;
+  player.vy = 0;
+  player.angle = Math.PI / 2;
+  player.density = 0;
+  player.crushDamage = 0;
+  player.alive = true;
+  player.trail.length = 0;
+}
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  if (k === 'r') { resetPlayer(); flash('SHIP RESPAWNED'); }
+  if (k === ' ') { paused = !paused; flash(paused ? 'PAUSED' : 'RESUMED'); e.preventDefault(); }
+  if (k === '.') { stepRequested = true; }
+  if (k === 'f') { PARAMS.followShip = !PARAMS.followShip; flash('FOLLOW: ' + (PARAMS.followShip ? 'ON' : 'OFF')); }
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+// Block default scroll behaviour for arrow keys
+window.addEventListener('keydown', e => {
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase()))
+    e.preventDefault();
+});
+
+function sampleDensity(x, y, r) {
+  const r2 = r * r;
+  const neigh = queryGrid(x, y);
+  let count = 0;
+  const hist = [0, 0, 0, 0];
+  for (let n = 0; n < neigh.length; n++) {
+    const j = neigh[n];
+    const dx = px[j] - x;
+    const dy = py[j] - y;
+    if (dx * dx + dy * dy < r2) {
+      count++;
+      hist[pType[j]]++;
+    }
+  }
+  return { count, hist };
+}
+
+function updatePlayer(dt) {
+  if (!player.alive) return;
+
+  // Thrust input
+  let tx = 0, ty = 0;
+  if (keys['arrowleft']  || keys['a']) tx -= 1;
+  if (keys['arrowright'] || keys['d']) tx += 1;
+  if (keys['arrowup']    || keys['w']) ty -= 1;
+  if (keys['arrowdown']  || keys['s']) ty += 1;
+  const tl = Math.hypot(tx, ty);
+  if (tl > 0) {
+    tx /= tl; ty /= tl;
+    player.vx += tx * PARAMS.thrustForce * dt;
+    player.vy += ty * PARAMS.thrustForce * dt;
+    player.angle = Math.atan2(ty, tx);
+  }
+
+  // Local density + composition
+  const r = PARAMS.densityRadius;
+  const sample = sampleDensity(player.x, player.y, r);
+  player.density = sample.count;
+  player.layerHist = sample.hist;
+
+  if (sample.count > 0) {
+    // Density gradient via 4-point sampling
+    const off = PARAMS.densityProbeOffset;
+    const dR = sampleDensity(player.x + off, player.y, r).count;
+    const dL = sampleDensity(player.x - off, player.y, r).count;
+    const dD = sampleDensity(player.x, player.y + off, r).count;
+    const dU = sampleDensity(player.x, player.y - off, r).count;
+    const gx = (dR - dL) / (2 * off);
+    const gy = (dD - dU) / (2 * off);
+
+    // Buoyancy: force toward lower density (opposite the gradient)
+    player.vx -= gx * PARAMS.buoyancyCoeff * dt;
+    player.vy -= gy * PARAMS.buoyancyCoeff * dt;
+
+    // Drag: scales with local density, opposes velocity
+    const dragF = sample.count * PARAMS.dragCoeff;
+    player.vx -= player.vx * dragF * dt;
+    player.vy -= player.vy * dragF * dt;
+
+    // Crush check
+    const speed = Math.hypot(player.vx, player.vy);
+    if (sample.count > PARAMS.crushThreshold && speed < PARAMS.escapeVel) {
+      player.crushDamage += dt;
+      if (player.crushDamage >= PARAMS.crushTime) {
+        player.alive = false;
+        flash('SHIP CRUSHED');
+      }
+    } else {
+      player.crushDamage = Math.max(0, player.crushDamage - dt * PARAMS.crushRecovery);
+    }
+  } else {
+    player.crushDamage = Math.max(0, player.crushDamage - dt * PARAMS.crushRecovery);
+  }
+
+  // Integrate
+  player.x += player.vx * dt;
+  player.y += player.vy * dt;
+
+  // Trail
+  player.trail.push(player.x, player.y);
+  const maxTrail = PARAMS.trailLength * 2;
+  if (player.trail.length > maxTrail) {
+    player.trail.splice(0, player.trail.length - maxTrail);
+  }
+}
+
+/* ============================================================
+   CAMERA
+   ============================================================ */
+
+const camera = { x: 0, y: 0, zoom: PARAMS.zoom };
+
+function updateCamera() {
+  if (PARAMS.followShip) {
+    camera.x += (player.x - camera.x) * PARAMS.cameraLerp;
+    camera.y += (player.y - camera.y) * PARAMS.cameraLerp;
+  }
+  camera.zoom += (PARAMS.zoom - camera.zoom) * 0.15;
+}
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.12 : 0.89;
+  PARAMS.zoom = Math.max(0.1, Math.min(4, PARAMS.zoom * factor));
+  syncPanelSlider('zoom');
+}, { passive: false });
+
+/* ============================================================
+   STARFIELD (cheap, deterministic)
+   ============================================================ */
+
+const STARS = [];
+for (let i = 0; i < 200; i++) {
+  STARS.push({
+    x: (Math.random() - 0.5) * 4000,
+    y: (Math.random() - 0.5) * 4000,
+    b: Math.random() * 0.5 + 0.2,
+  });
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+
+function render() {
+  const cw = canvas.width, ch = canvas.height;
+  ctx.fillStyle = '#07080b';
+  ctx.fillRect(0, 0, cw, ch);
+
+  const cx = cw / 2, cy = ch / 2;
+  const z = camera.zoom;
+
+  // Stars (parallax: at 0.3 scale)
+  ctx.save();
+  ctx.translate(cx, cy);
+  for (let i = 0; i < STARS.length; i++) {
+    const s = STARS[i];
+    const sx = (s.x - camera.x * 0.3) * z;
+    const sy = (s.y - camera.y * 0.3) * z;
+    if (sx < -cw || sx > cw || sy < -ch || sy > ch) continue;
+    ctx.fillStyle = `rgba(255,255,255,${s.b})`;
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+  ctx.restore();
+
+  // Origin marker
+  if (PARAMS.showOrigin) {
+    const ox = (0 - camera.x) * z + cx;
+    const oy = (0 - camera.y) * z + cy;
+    ctx.strokeStyle = '#1a2030';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ox - 8, oy); ctx.lineTo(ox + 8, oy);
+    ctx.moveTo(ox, oy - 8); ctx.lineTo(ox, oy + 8);
+    ctx.stroke();
+  }
+
+  // Particles
+  const ps = PARAMS.particleSize * z;
+  const halfPs = ps / 2;
+  const margin = ps + 2;
+  ctx.globalAlpha = PARAMS.particleAlpha;
+  for (let i = 0; i < N; i++) {
+    const sx = (px[i] - camera.x) * z + cx;
+    const sy = (py[i] - camera.y) * z + cy;
+    if (sx < -margin || sx > cw + margin || sy < -margin || sy > ch + margin) continue;
+    ctx.fillStyle = TYPES[pType[i]].color;
+    ctx.fillRect(sx - halfPs, sy - halfPs, ps, ps);
+  }
+  ctx.globalAlpha = 1;
+
+  // Player trail
+  if (player.trail.length >= 4) {
+    ctx.strokeStyle = 'rgba(255, 220, 120, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < player.trail.length; i += 2) {
+      const tx = (player.trail[i]     - camera.x) * z + cx;
+      const ty = (player.trail[i + 1] - camera.y) * z + cy;
+      if (!started) { ctx.moveTo(tx, ty); started = true; }
+      else          { ctx.lineTo(tx, ty); }
+    }
+    ctx.stroke();
+  }
+
+  // Density probe overlay
+  if (PARAMS.showDensityProbe) {
+    const psx = (player.x - camera.x) * z + cx;
+    const psy = (player.y - camera.y) * z + cy;
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.beginPath();
+    ctx.arc(psx, psy, PARAMS.densityRadius * z, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(143,180,255,0.18)';
+    const off = PARAMS.densityProbeOffset * z;
+    for (const [dx, dy] of [[off,0],[-off,0],[0,off],[0,-off]]) {
+      ctx.beginPath();
+      ctx.arc(psx + dx, psy + dy, PARAMS.densityRadius * z, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // Player ship
+  drawShip(cx, cy);
+}
+
+function drawShip(cx, cy) {
+  const z = camera.zoom;
+  const sx = (player.x - camera.x) * z + cx;
+  const sy = (player.y - camera.y) * z + cy;
+
+  // Thruster glow when accelerating
+  const thrusting = keys['w'] || keys['a'] || keys['s'] || keys['d'] ||
+                    keys['arrowup'] || keys['arrowdown'] || keys['arrowleft'] || keys['arrowright'];
+  if (thrusting && player.alive) {
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(player.angle);
+    const flame = 14 + Math.random() * 6;
+    const grad = ctx.createLinearGradient(-flame, 0, 0, 0);
+    grad.addColorStop(0, 'rgba(255,100,40,0)');
+    grad.addColorStop(0.5, 'rgba(255,150,60,0.5)');
+    grad.addColorStop(1, 'rgba(255,220,160,0.9)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(-flame, 0);
+    ctx.lineTo(-4, 3);
+    ctx.lineTo(-4, -3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(player.angle);
+
+  // Ship body
+  const crushPct = player.crushDamage / PARAMS.crushTime;
+  if (!player.alive) {
+    ctx.fillStyle = '#552025';
+    ctx.strokeStyle = '#ff5060';
+  } else if (crushPct > 0.05) {
+    const r = 200 + Math.floor(55 * (1 - crushPct));
+    const g = Math.floor(220 * (1 - crushPct));
+    ctx.fillStyle = `rgb(${r}, ${g}, ${g})`;
+    ctx.strokeStyle = '#fff';
+  } else {
+    ctx.fillStyle = '#e8edf3';
+    ctx.strokeStyle = '#8fb4ff';
+  }
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(10, 0);
+  ctx.lineTo(-5, 5);
+  ctx.lineTo(-3, 0);
+  ctx.lineTo(-5, -5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ============================================================
+   HUD
+   ============================================================ */
+
+const hudEls = {
+  fps:   document.getElementById('h_fps'),
+  n:     document.getElementById('h_n'),
+  pos:   document.getElementById('h_pos'),
+  vel:   document.getElementById('h_vel'),
+  den:   document.getElementById('h_den'),
+  lay:   document.getElementById('h_lay'),
+  crush: document.getElementById('h_crush'),
+};
+
+function updateHud(fps) {
+  hudEls.fps.textContent = fps.toFixed(0);
+  hudEls.fps.className = 'val ' + (fps >= 50 ? 'good' : fps >= 30 ? 'warn' : 'bad');
+  hudEls.n.textContent = N;
+  hudEls.pos.textContent = `${player.x.toFixed(0)}, ${player.y.toFixed(0)}`;
+  const speed = Math.hypot(player.vx, player.vy);
+  hudEls.vel.textContent = speed.toFixed(1);
+  hudEls.den.textContent = player.density;
+  hudEls.den.className = 'val ' + (player.density > PARAMS.crushThreshold ? 'bad' :
+                                    player.density > PARAMS.crushThreshold * 0.5 ? 'warn' : 'good');
+
+  // Dominant layer
+  let domType = -1, domCount = 0;
+  for (let t = 0; t < 4; t++) {
+    if (player.layerHist[t] > domCount) { domCount = player.layerHist[t]; domType = t; }
+  }
+  if (domType >= 0 && domCount > 0) {
+    hudEls.lay.textContent = TYPES[domType].name;
+    hudEls.lay.style.color = TYPES[domType].color;
+  } else {
+    hudEls.lay.textContent = 'vacuum';
+    hudEls.lay.style.color = 'var(--muted)';
+  }
+
+  const cp = (player.crushDamage / PARAMS.crushTime * 100);
+  hudEls.crush.textContent = player.alive ? `${cp.toFixed(0)}%` : 'DESTROYED · R to respawn';
+  hudEls.crush.className = 'val ' + (!player.alive ? 'bad' : cp > 50 ? 'warn' : cp > 0 ? 'warn' : 'good');
+}
+
+/* ============================================================
+   CONTROL PANEL
+   ============================================================ */
+
+const panel = document.getElementById('panel');
+const toggleBtn = document.getElementById('toggle');
+const legend = document.getElementById('legend');
+
+const PANEL_SECTIONS = [
+  {
+    title: 'COMPOSITION',
+    items: [
+      ['countH',       0, 2000, 1,    'Hydrogen count'],
+      ['countN',       0, 2000, 1,    'Nitrogen count'],
+      ['countC',       0, 2000, 1,    'Carbon count'],
+      ['countX',       0, 2000, 1,    'Xenon count'],
+      ['spawnRadius',  50, 1500, 10,  'Spawn radius'],
+      ['initialJitter', 0, 30,  0.5,  'Initial jitter'],
+    ],
+    actions: [
+      ['Respawn particles', () => { initParticles(); resetPlayer(); flash('PARTICLES RESET'); }],
+    ],
+  },
+  {
+    title: 'PARTICLE FORCES',
+    items: [
+      ['universalAttract',  0,    100, 0.5, 'Universal grav'],
+      ['universalSoften',   1,    200, 1,   'Soften'],
+      ['sameTypeAttract',   0,    400, 1,   'Same-type attract'],
+      ['sameTypeRepulse',   0,    1500,5,   'Same-type repulse'],
+      ['crossTypeRepulse',  0,    400, 1,   'Cross-type repulse'],
+      ['crossTypeRadius',   3,    60,  1,   'Cross-type radius'],
+      ['forceCap',          5,    300, 1,   'Force cap'],
+      ['damping',           0.50, 1.00,0.005,'Damping'],
+      ['simSpeed',          0.0,  3.0, 0.05, 'Sim speed'],
+    ],
+  },
+  {
+    title: 'PLAYER PHYSICS',
+    items: [
+      ['thrustForce',        0,   200, 1,    'Thrust'],
+      ['buoyancyCoeff',      0,   600, 5,    'Buoyancy'],
+      ['dragCoeff',          0,   0.3, 0.002,'Drag'],
+      ['densityRadius',      5,   80,  1,    'Density radius'],
+      ['densityProbeOffset', 4,   60,  1,    'Probe offset'],
+      ['crushThreshold',     0,   200, 1,    'Crush threshold'],
+      ['escapeVel',          0,   100, 0.5,  'Escape vel'],
+      ['crushTime',          0.1, 8,   0.1,  'Crush time'],
+      ['crushRecovery',      0.0, 3,   0.05, 'Crush recovery'],
+      ['startDistance',      200, 2000,10,   'Start distance'],
+    ],
+  },
+  {
+    title: 'DISPLAY',
+    items: [
+      ['particleSize',       0.5, 5,   0.1,  'Particle size'],
+      ['particleAlpha',      0.1, 1.0, 0.05, 'Particle alpha'],
+      ['trailLength',        0,   300, 5,    'Trail length'],
+      ['zoom',               0.1, 4,   0.05, 'Zoom'],
+      ['cameraLerp',         0.0, 1.0, 0.02, 'Camera follow'],
+      ['showDensityProbe',   0, 0, 0, 'Show density probe', 'bool'],
+      ['showOrigin',         0, 0, 0, 'Show origin marker', 'bool'],
+      ['followShip',         0, 0, 0, 'Follow ship (F)',    'bool'],
+    ],
+  },
+];
+
+const _sliderEls = {};
+
+function buildPanel() {
+  let html = '';
+  for (const sec of PANEL_SECTIONS) {
+    html += `<h3>${sec.title}</h3>`;
+    for (const item of sec.items) {
+      const [key, min, max, step, label, type] = item;
+      if (type === 'bool') {
+        html += `<div class="ctl bool">
+          <label>${label}</label>
+          <input type="checkbox" data-key="${key}" ${PARAMS[key] ? 'checked' : ''}>
+        </div>`;
+      } else {
+        html += `<div class="ctl">
+          <label>${label}</label>
+          <input type="range" min="${min}" max="${max}" step="${step}" value="${PARAMS[key]}" data-key="${key}">
+          <span class="val" data-val="${key}">${formatVal(PARAMS[key], step)}</span>
+        </div>`;
+      }
+    }
+    if (sec.actions) {
+      html += '<div class="btn-row">';
+      for (let i = 0; i < sec.actions.length; i++) {
+        html += `<button data-action-section="${sec.title}" data-action-idx="${i}">${sec.actions[i][0]}</button>`;
+      }
+      html += '</div>';
+    }
+  }
+
+  html += `<h3>PRESETS</h3>
+    <div class="btn-row">
+      <button id="btn_export">Export</button>
+      <button id="btn_import">Import</button>
+      <button id="btn_save_local">Save local</button>
+      <button id="btn_load_local">Load local</button>
+      <button id="btn_defaults">Defaults</button>
+    </div>
+    <textarea id="presetText" placeholder="Paste a preset JSON here, then click Import..."></textarea>`;
+
+  panel.innerHTML = html;
+
+  // Wire sliders
+  panel.querySelectorAll('input[type=range]').forEach(inp => {
+    const key = inp.dataset.key;
+    const step = parseFloat(inp.step);
+    _sliderEls[key] = inp;
+    inp.addEventListener('input', () => {
+      PARAMS[key] = parseFloat(inp.value);
+      const valEl = panel.querySelector(`[data-val="${key}"]`);
+      if (valEl) valEl.textContent = formatVal(PARAMS[key], step);
+    });
+  });
+  // Wire checkboxes
+  panel.querySelectorAll('input[type=checkbox]').forEach(inp => {
+    const key = inp.dataset.key;
+    inp.addEventListener('change', () => { PARAMS[key] = inp.checked; });
+  });
+  // Wire action buttons
+  panel.querySelectorAll('button[data-action-section]').forEach(btn => {
+    const sec = PANEL_SECTIONS.find(s => s.title === btn.dataset.actionSection);
+    const idx = parseInt(btn.dataset.actionIdx, 10);
+    if (sec && sec.actions[idx]) btn.addEventListener('click', sec.actions[idx][1]);
+  });
+
+  document.getElementById('btn_export').addEventListener('click', exportPreset);
+  document.getElementById('btn_import').addEventListener('click', importPreset);
+  document.getElementById('btn_save_local').addEventListener('click', () => {
+    localStorage.setItem('gasDiverPreset', JSON.stringify(PARAMS));
+    flash('SAVED TO BROWSER');
+  });
+  document.getElementById('btn_load_local').addEventListener('click', () => {
+    const v = localStorage.getItem('gasDiverPreset');
+    if (!v) { flash('NO LOCAL PRESET'); return; }
+    document.getElementById('presetText').value = v;
+    importPreset();
+  });
+  document.getElementById('btn_defaults').addEventListener('click', () => {
+    Object.assign(PARAMS, DEFAULT_PARAMS);
+    buildPanel();
+    initParticles(); resetPlayer();
+    flash('DEFAULTS RESTORED');
+  });
+}
+
+function formatVal(v, step) {
+  if (typeof v === 'boolean') return v ? 'on' : 'off';
+  if (step >= 1) return v.toFixed(0);
+  if (step >= 0.1) return v.toFixed(1);
+  if (step >= 0.01) return v.toFixed(2);
+  return v.toFixed(3);
+}
+
+function syncPanelSlider(key) {
+  const el = _sliderEls[key];
+  if (el) {
+    el.value = PARAMS[key];
+    const valEl = panel.querySelector(`[data-val="${key}"]`);
+    if (valEl) valEl.textContent = formatVal(PARAMS[key], parseFloat(el.step));
+  }
+}
+
+function exportPreset() {
+  const ta = document.getElementById('presetText');
+  ta.value = JSON.stringify(PARAMS, null, 2);
+  ta.select();
+  try { document.execCommand('copy'); flash('COPIED TO CLIPBOARD'); } catch (e) { flash('PRESET IN BOX'); }
+}
+
+function importPreset() {
+  const ta = document.getElementById('presetText');
+  let txt = ta.value.trim();
+  if (!txt) { flash('PASTE A PRESET FIRST'); return; }
+  try {
+    const obj = JSON.parse(txt);
+    let n = 0;
+    for (const k in obj) if (k in PARAMS) { PARAMS[k] = obj[k]; n++; }
+    buildPanel();
+    initParticles(); resetPlayer();
+    flash(`IMPORTED ${n} KEYS`);
+  } catch (e) {
+    flash('PARSE ERROR');
+    console.error(e);
+  }
+}
+
+// Snapshot defaults so the Defaults button works
+const DEFAULT_PARAMS = Object.assign({}, PARAMS);
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+
+const toastEl = document.getElementById('toast');
+let toastTimer = 0;
+function flash(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 900);
+}
+
+/* ============================================================
+   PANEL TOGGLE
+   ============================================================ */
+
+toggleBtn.addEventListener('click', () => {
+  panel.classList.toggle('collapsed');
+  toggleBtn.classList.toggle('collapsed');
+  legend.classList.toggle('collapsed');
+});
+
+/* ============================================================
+   MAIN LOOP — fixed timestep simulation
+   ============================================================ */
+
+const FIXED_DT = 1 / 60;
+let simAccumulator = 0;
+let lastTime = performance.now();
+let paused = false;
+let stepRequested = false;
+
+let frames = 0, fpsTimer = 0, fps = 60;
+
+function loop(now) {
+  let realDt = (now - lastTime) / 1000;
+  if (realDt > 0.25) realDt = 0.25;
+  lastTime = now;
+
+  // FPS
+  frames++;
+  fpsTimer += realDt;
+  if (fpsTimer >= 0.5) {
+    fps = frames / fpsTimer;
+    frames = 0; fpsTimer = 0;
+  }
+
+  // Fixed timestep with cap
+  if (!paused || stepRequested) {
+    simAccumulator += realDt * PARAMS.simSpeed;
+    if (stepRequested) { simAccumulator = FIXED_DT; stepRequested = false; }
+    let steps = 0;
+    while (simAccumulator >= FIXED_DT && steps < 4) {
+      simulate(FIXED_DT);
+      updatePlayer(FIXED_DT);
+      simAccumulator -= FIXED_DT;
+      steps++;
+    }
+    if (steps === 4) simAccumulator = 0; // avoid spiral of death
+  }
+
+  updateCamera();
+  render();
+  updateHud(fps);
+  requestAnimationFrame(loop);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+
+initParticles();
+resetPlayer();
+buildPanel();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
