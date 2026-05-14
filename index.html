@@ -194,6 +194,58 @@
     transition: opacity 0.2s;
   }
   #toast.show { opacity: 1; }
+
+  /* ---- Fullscreen button ---- */
+  #btn-fs {
+    position: fixed; top: 12px;
+    right: 372px;
+    z-index: 10;
+    width: 32px; height: 32px;
+    padding: 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    font-size: 15px;
+    line-height: 32px;
+    text-align: center;
+    color: var(--accent);
+    cursor: pointer;
+    letter-spacing: 0;
+    transition: right 0.2s ease;
+  }
+  #btn-fs.collapsed { right: 52px; }
+  #btn-fs:hover { background: #1f2530; border-color: var(--accent); }
+
+  /* ---- Mobile action buttons ---- */
+  #mobile-btns {
+    position: fixed;
+    bottom: 20px; right: 20px;
+    display: flex; gap: 12px;
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  body.touch #mobile-btns { opacity: 1; pointer-events: auto; }
+  body.touch #status { display: none; }
+  /* Make HUD more compact on touch/mobile */
+  @media (max-height: 500px) {
+    #hud { font-size: 10px; padding: 6px 10px; }
+    #hud .sep { margin: 3px 0; }
+  }
+  .mob-btn {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: rgba(14, 16, 22, 0.82);
+    border: 1px solid rgba(143, 180, 255, 0.22);
+    color: var(--accent);
+    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .mob-btn:active { background: rgba(30, 50, 80, 0.9); border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -231,6 +283,13 @@
 
 <div id="panel"></div>
 <div id="toast"></div>
+
+<button id="btn-fs" title="Toggle fullscreen">⛶</button>
+
+<div id="mobile-btns">
+  <button class="mob-btn" id="mob-respawn" title="Respawn">↺</button>
+  <button class="mob-btn" id="mob-pause"   title="Pause / Resume">⏸</button>
+</div>
 
 <script>
 'use strict';
@@ -541,6 +600,100 @@ window.addEventListener('keydown', e => {
     e.preventDefault();
 });
 
+/* ============================================================
+   TOUCH JOYSTICK
+   Left 65% of screen = joystick zone (floating origin).
+   Right 35% = reserved for HTML action buttons.
+   ============================================================ */
+
+const JOYSTICK_RADIUS = 58;
+const touchState = { stick: null };
+let isTouchDevice = false;
+
+window.addEventListener('touchstart', () => {
+  if (!isTouchDevice) {
+    isTouchDevice = true;
+    document.body.classList.add('touch');
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (!touchState.stick && t.clientX < window.innerWidth * 0.65) {
+      touchState.stick = { id: t.identifier, cx: t.clientX, cy: t.clientY, dx: 0, dy: 0 };
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (touchState.stick && t.identifier === touchState.stick.id) {
+      const dx = t.clientX - touchState.stick.cx;
+      const dy = t.clientY - touchState.stick.cy;
+      const len = Math.hypot(dx, dy);
+      if (len < 5) {
+        touchState.stick.dx = 0;
+        touchState.stick.dy = 0;
+      } else {
+        const clamped = Math.min(len, JOYSTICK_RADIUS);
+        touchState.stick.dx = (dx / len) * (clamped / JOYSTICK_RADIUS);
+        touchState.stick.dy = (dy / len) * (clamped / JOYSTICK_RADIUS);
+      }
+    }
+  }
+}, { passive: false });
+
+function clearStick(e) {
+  for (const t of e.changedTouches) {
+    if (touchState.stick && t.identifier === touchState.stick.id) {
+      touchState.stick = null;
+    }
+  }
+}
+canvas.addEventListener('touchend',    clearStick);
+canvas.addEventListener('touchcancel', clearStick);
+
+/* ============================================================
+   FULLSCREEN
+   ============================================================ */
+
+const fsBtn = document.getElementById('btn-fs');
+
+function toggleFullscreen() {
+  const el = document.documentElement;
+  const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (isFs) {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
+  } else {
+    const enter = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (enter) enter.call(el);
+    else flash('FULLSCREEN NOT SUPPORTED');
+  }
+}
+fsBtn.addEventListener('click', toggleFullscreen);
+
+function onFsChange() {
+  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  fsBtn.textContent = isFs ? '⊠' : '⛶';
+  fsBtn.title = isFs ? 'Exit fullscreen' : 'Toggle fullscreen';
+  resize();
+}
+document.addEventListener('fullscreenchange',       onFsChange);
+document.addEventListener('webkitfullscreenchange', onFsChange);
+
+/* Mobile action buttons */
+document.getElementById('mob-respawn').addEventListener('click', () => {
+  resetPlayer(); flash('SHIP RESPAWNED');
+});
+document.getElementById('mob-pause').addEventListener('click', () => {
+  paused = !paused;
+  document.getElementById('mob-pause').textContent = paused ? '▶' : '⏸';
+  flash(paused ? 'PAUSED' : 'RESUMED');
+});
+
 function sampleDensity(x, y, r) {
   const r2 = r * r;
   const neigh = queryGrid(x, y);
@@ -567,9 +720,16 @@ function updatePlayer(dt) {
   if (keys['arrowright'] || keys['d']) tx += 1;
   if (keys['arrowup']    || keys['w']) ty -= 1;
   if (keys['arrowdown']  || keys['s']) ty += 1;
+  // Touch joystick — add on top of keyboard (sum, then clamp to unit)
+  if (touchState.stick) {
+    tx += touchState.stick.dx;
+    ty += touchState.stick.dy;
+  }
   const tl = Math.hypot(tx, ty);
   if (tl > 0) {
-    tx /= tl; ty /= tl;
+    const norm = Math.min(tl, 1); // clamp so keyboard+touch don't super-boost
+    tx = (tx / tl) * norm;
+    ty = (ty / tl) * norm;
     player.vx += tx * PARAMS.thrustForce * dt;
     player.vy += ty * PARAMS.thrustForce * dt;
     player.angle = Math.atan2(ty, tx);
@@ -746,6 +906,76 @@ function render() {
 
   // Player ship
   drawShip(cx, cy);
+
+  // Touch joystick (screen-space overlay, drawn last so it's always on top)
+  drawJoystick();
+}
+
+function drawJoystick() {
+  if (!isTouchDevice) return;
+  const R = JOYSTICK_RADIUS;
+
+  if (touchState.stick) {
+    const ox = touchState.stick.cx, oy = touchState.stick.cy;
+
+    // Outer ring
+    ctx.save();
+    ctx.strokeStyle = 'rgba(143,180,255,0.28)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(ox, oy, R, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Cardinal tick marks
+    ctx.strokeStyle = 'rgba(143,180,255,0.14)';
+    ctx.lineWidth = 1;
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 2) {
+      ctx.beginPath();
+      ctx.moveTo(ox + Math.cos(a) * (R - 9), oy + Math.sin(a) * (R - 9));
+      ctx.lineTo(ox + Math.cos(a) * R,        oy + Math.sin(a) * R);
+      ctx.stroke();
+    }
+
+    // Stick dot (clamped visual position)
+    const sx = ox + touchState.stick.dx * R;
+    const sy = oy + touchState.stick.dy * R;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 20, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(143,180,255,0.16)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(143,180,255,0.60)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Line from centre to stick
+    ctx.strokeStyle = 'rgba(143,180,255,0.20)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(sx, sy);
+    ctx.stroke();
+
+    // Centre pip
+    ctx.beginPath();
+    ctx.arc(ox, oy, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(143,180,255,0.40)';
+    ctx.fill();
+
+    ctx.restore();
+  } else {
+    // Idle hint — faint ring at bottom-left corner
+    const hx = 80, hy = canvas.height - 80;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(143,180,255,0.07)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(hx, hy, R, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(hx, hy, 18, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawShip(cx, cy) {
@@ -754,8 +984,10 @@ function drawShip(cx, cy) {
   const sy = (player.y - camera.y) * z + cy;
 
   // Thruster glow when accelerating
+  const touchThrusting = !!(touchState.stick && (touchState.stick.dx !== 0 || touchState.stick.dy !== 0));
   const thrusting = keys['w'] || keys['a'] || keys['s'] || keys['d'] ||
-                    keys['arrowup'] || keys['arrowdown'] || keys['arrowleft'] || keys['arrowright'];
+                    keys['arrowup'] || keys['arrowdown'] || keys['arrowleft'] || keys['arrowright'] ||
+                    touchThrusting;
   if (thrusting && player.alive) {
     ctx.save();
     ctx.translate(sx, sy);
@@ -1065,6 +1297,7 @@ toggleBtn.addEventListener('click', () => {
   panel.classList.toggle('collapsed');
   toggleBtn.classList.toggle('collapsed');
   legend.classList.toggle('collapsed');
+  fsBtn.classList.toggle('collapsed');
 });
 
 /* ============================================================
